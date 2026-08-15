@@ -1,36 +1,49 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# VolTechAI Backend
+
+This is the NestJS backend microservice built to support the VolTechAI application ecosystem. It safely governs database state, validates pricing directly from PostgreSQL, and orchestrates secure integrations with Stripe.
+
+## Architecture
+- **NestJS**: Provides the structured, injectable module ecosystem supporting the REST APIs.
+- **Prisma & PostgreSQL**: Robust type-safe data handling for packages, orders, and payment statuses.
+- **Stripe**: The core payment integration. The backend controls API secrets, executes `payment_intents` matching verified Postgres prices, and verifies raw webhooks to protect against arbitrary client manipulation.
 
 ## Getting Started
 
-First, run the development server:
-
+### 1. Requirements
+Ensure you have Docker to run the database instance:
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+docker compose up -d
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 2. Configure Environment
+Create a `.env` in this directory:
+```
+NODE_ENV=development
+PORT=3001
+DATABASE_URL="postgresql://niral:niral_secret@localhost:5432/voltechai"
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+FRONTEND_URL=http://localhost:3000
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 3. Install & Seed
+Install dependencies with Bun, execute database schema upgrades, and seed the verified authoritative package catalog.
+```bash
+bun install
+bunx prisma migrate dev
+bun run db:seed
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### 4. Running the Dev Server
+```bash
+bun run dev
+```
 
-## Learn More
+The APIs mount on `http://localhost:3001/api`.
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Testing
+Run unit tests across Modules and complete end-to-end (E2E) testing against active app interfaces:
+```bash
+bun run test
+bun run test:e2e
+```

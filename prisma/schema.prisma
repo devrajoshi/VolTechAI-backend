@@ -1,0 +1,67 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum OrderStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+}
+
+// ─── Models ──────────────────────────────────────────────────────────────────
+
+/// Service packages with authoritative pricing. Seeded from prisma/seed.ts.
+model Package {
+  id        String   @id @default(cuid())
+  slug      String   @unique // e.g. "tech-launch" - used by client to reference a package
+  name      String
+  amount    Int // In smallest currency unit (pence for GBP)
+  currency  String   @default("gbp")
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orders Order[]
+
+  @@index([slug])
+  @@map("packages")
+}
+
+/// Individual payment orders created when a checkout session is initiated.
+model Order {
+  id              String      @id @default(cuid())
+  packageId       String
+  package         Package     @relation(fields: [packageId], references: [id])
+  amount          Int // Snapshot of amount at time of order creation
+  currency        String // Snapshot of currency at time of order creation
+  serviceName     String // Snapshot of service name at time of order creation
+  status          OrderStatus @default(PENDING)
+  stripePaymentId String?     @unique // Stripe PaymentIntent ID, set after PI creation
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@index([status])
+  @@index([stripePaymentId])
+  @@map("orders")
+}
+
+/// Idempotency log for processed Stripe webhook events.
+/// Before handling any event, we check if event.id exists here.
+/// This prevents double-processing when Stripe retries delivery.
+model WebhookEvent {
+  id          String   @id // Stripe event ID (e.g. "evt_xxx")
+  type        String
+  processedAt DateTime @default(now())
+
+  @@map("webhook_events")
+}
