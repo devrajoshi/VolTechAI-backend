@@ -85,6 +85,28 @@ export class OrdersService {
     }
 
     /**
+     * Fetches paginated orders ordered by creation date descending.
+     */
+    async findAll(page: number = 1, limit: number = 10): Promise<{ data: Order[], total: number, page: number, totalPages: number }> {
+        const skip = (page - 1) * limit;
+        const [data, total] = await Promise.all([
+            this.prisma.order.findMany({
+                skip,
+                take: limit,
+                orderBy: { createdAt: 'desc' },
+            }),
+            this.prisma.order.count(),
+        ]);
+
+        return {
+            data,
+            total,
+            page,
+            totalPages: Math.ceil(total / limit),
+        };
+    }
+
+    /**
      * Finds an order by Stripe PaymentIntent ID.
      * Used in webhook processing to map a Stripe event back to our Order.
      */
