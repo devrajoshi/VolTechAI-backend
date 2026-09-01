@@ -1,9 +1,26 @@
 node_modules
 dist
 coverage
+<<<<<<< Updated upstream
 .git
 .gitignore
 .env
 .env.*
 README.md
 server.pid
+=======
+
+.git
+.gitignore
+
+.env
+.env.*
+!.env.example
+
+README.md
+server.pid
+
+.vscode
+.idea
+.DS_Store
+>>>>>>> Stashed changes
