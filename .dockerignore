@@ -12,6 +12,6 @@ coverage
 README.md
 server.pid
 
-.vscode
-.idea
-.DS_Store
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
