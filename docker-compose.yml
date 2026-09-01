@@ -1,20 +1,25 @@
-version: '3.9'
+version: "3.9"
 
 services:
   postgres:
     image: postgres:16-alpine
     container_name: voltechai-postgres
+
     restart: unless-stopped
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-voltechai}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-voltechai_secret}
-      POSTGRES_DB: ${POSTGRES_DB:-voltechai}
+
     ports:
-      - '5432:5432'
+      - "5432:5432"
+
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+
     volumes:
       - postgres_data:/var/lib/postgresql/data
+
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-voltechai}']
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}" ]
       interval: 10s
       timeout: 5s
       retries: 5

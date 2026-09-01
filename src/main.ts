@@ -15,7 +15,8 @@ async function bootstrap() {
 
     const configService = app.get(ConfigService);
     const port = configService.get<number>('PORT', 3001);
-    const frontendUrl = configService.get<string>('FRONTEND_URL', 'http://localhost:3000');
+    const frontendWebUrl = configService.get<string>('FRONTEND_WEB_URL', 'http://localhost:3000');
+    const frontendAdminUrl = configService.get<string>('FRONTEND_ADMIN_URL', 'http://localhost:3002');
     const nodeEnv = configService.get<string>('NODE_ENV', 'development');
 
     // ─── Security: HTTP Headers ─────────────────────────────────────────────────
@@ -24,7 +25,7 @@ async function bootstrap() {
     // ─── Security: CORS ──────────────────────────────────────────────────────────
     // Only allow requests from the known frontend origin.
     app.enableCors({
-        origin: frontendUrl.split(',').map((url) => url.trim()),
+        origin: [frontendWebUrl, frontendAdminUrl],
         methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
         allowedHeaders: ['Content-Type', 'Authorization'],
         credentials: true,
