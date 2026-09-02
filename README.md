@@ -23,7 +23,8 @@ PORT=3001
 DATABASE_URL="postgresql://niral:niral_secret@localhost:5432/voltechai"
 STRIPE_SECRET_KEY=sk_test_...
 STRIPE_WEBHOOK_SECRET=whsec_...
-FRONTEND_URL=http://localhost:3000
+FRONTEND_WEB_URL=http://localhost:3000
+FRONTEND_ADMIN_URL=http://localhost:3002
 ```
 
 ### 3. Install & Seed

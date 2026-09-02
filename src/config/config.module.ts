@@ -40,7 +40,8 @@ import * as Joi from 'joi';
                     }),
 
                 // CORS
-                FRONTEND_URL: Joi.string().default('http://localhost:3000'),
+                FRONTEND_WEB_URL: Joi.string().uri().default('http://localhost:3000'),
+                FRONTEND_ADMIN_URL: Joi.string().uri().default('http://localhost:3002'),
             }),
             validationOptions: {
                 abortEarly: false, // Report ALL missing vars at once, not just the first
