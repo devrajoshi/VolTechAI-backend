@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, InternalServerErrorException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { WebhooksService } from './webhooks.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -26,6 +26,31 @@ const mockPaymentsService = {
     getStripeClient: jest.fn().mockReturnValue({
         webhooks: {
             constructEvent: mockStripeConstructEvent,
+        },
+        paymentIntents: {
+            retrieve: jest.fn().mockResolvedValue({
+                id: 'pi_test_123',
+                created: 1700000000,
+                payment_method: {
+                    type: 'card',
+                    billing_details: {
+                        name: 'Test Customer',
+                        email: 'customer@example.com',
+                        phone: '+441234567890',
+                        address: {
+                            country: 'GB',
+                            line1: '1 Test Street',
+                            city: 'London',
+                            postal_code: 'SW1A 1AA',
+                        },
+                    },
+                    card: { brand: 'visa', last4: '4242' },
+                },
+                latest_charge: {
+                    id: 'ch_test_123',
+                    receipt_url: 'https://stripe.example/receipt',
+                },
+            }),
         },
     }),
 };
@@ -114,7 +139,19 @@ describe('WebhooksService', () => {
             const result = await service.handleWebhook(rawBody, signature);
 
             expect(result).toEqual({ received: true });
-            expect(mockOrdersService.markSucceeded).toHaveBeenCalledWith('order_abc');
+            expect(mockOrdersService.markSucceeded).toHaveBeenCalledWith(
+                'order_abc',
+                expect.objectContaining({
+                    customerName: 'Test Customer',
+                    customerEmail: 'customer@example.com',
+                    customerPhone: '+441234567890',
+                    customerCountry: 'GB',
+                    cardBrand: 'visa',
+                    cardLast4: '4242',
+                    stripeChargeId: 'ch_test_123',
+                    receiptUrl: 'https://stripe.example/receipt',
+                }),
+            );
             expect(mockPrismaService.webhookEvent.create).toHaveBeenCalledWith({
                 data: { id: 'evt_test_123', type: 'payment_intent.succeeded' },
             });
@@ -138,13 +175,13 @@ describe('WebhooksService', () => {
             expect(mockOrdersService.markFailed).toHaveBeenCalledWith('order_abc');
         });
 
-        it('should return { received: true } even if order handler throws (safe failure)', async () => {
+    it('should return a retryable server error if order handler throws', async () => {
             mockStripeConstructEvent.mockReturnValue(mockEvent);
             mockOrdersService.markSucceeded.mockRejectedValue(new Error('DB error'));
 
-            // Should NOT throw — we always return 200 to Stripe
-            const result = await service.handleWebhook(rawBody, signature);
-            expect(result).toEqual({ received: true });
+            await expect(service.handleWebhook(rawBody, signature)).rejects.toThrow(
+                InternalServerErrorException,
+            );
         });
     });
 });

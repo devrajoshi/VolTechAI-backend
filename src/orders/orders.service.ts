@@ -45,7 +45,7 @@ export class OrdersService {
      * Marks an order as SUCCEEDED. Idempotent — re-calling for an already
      * succeeded order is a no-op and returns the existing record.
      */
-    async markSucceeded(orderId: string): Promise<Order> {
+    async markSucceeded(orderId: string, paymentDetails?: Partial<Order>): Promise<Order> {
         const order = await this.findById(orderId);
 
         if (order.status === 'SUCCEEDED') {
@@ -55,7 +55,7 @@ export class OrdersService {
 
         return this.prisma.order.update({
             where: { id: orderId },
-            data: { status: 'SUCCEEDED' },
+            data: { status: 'SUCCEEDED', ...paymentDetails },
         });
     }
 
@@ -82,6 +82,14 @@ export class OrdersService {
     async getStatus(orderId: string): Promise<{ orderId: string; status: OrderStatus }> {
         const order = await this.findById(orderId);
         return { orderId: order.id, status: order.status };
+    }
+
+    /**
+     * Returns the persisted purchase details for the public confirmation page.
+     * The order ID is generated server-side and is included in the Stripe return URL.
+     */
+    async getConfirmation(orderId: string): Promise<Order> {
+        return this.findById(orderId);
     }
 
     /**

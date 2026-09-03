@@ -64,9 +64,9 @@ export class WebhooksService {
                 `Handler failed for event ${event.id} (${event.type}): ${handlerError instanceof Error ? handlerError.message : handlerError
                 }`,
             );
-            // We still return 200 to Stripe. Failing here would cause infinite retries.
-            // In production, send this to a dead-letter queue (DLQ) instead.
-            return { received: true };
+            // Return a 5xx so Stripe retries transient database/Stripe failures.
+            // Permanent failures should be moved to a dead-letter workflow later.
+            throw new InternalServerErrorException('Webhook processing failed.');
         }
 
         // ─── 4. Record Processed Event ───────────────────────────────────────────
@@ -112,7 +112,38 @@ export class WebhooksService {
             return;
         }
 
-        await this.ordersService.markSucceeded(order.id);
+        const enrichedIntent = await this.paymentsService.getStripeClient().paymentIntents.retrieve(
+            paymentIntent.id,
+            { expand: ['payment_method', 'latest_charge'] },
+        );
+        const paymentMethod = typeof enrichedIntent.payment_method === 'object'
+            ? enrichedIntent.payment_method
+            : null;
+        const billing = paymentMethod?.billing_details;
+        const card = paymentMethod?.type === 'card' && 'card' in paymentMethod
+            ? paymentMethod.card
+            : null;
+        const charge = typeof enrichedIntent.latest_charge === 'object'
+            ? enrichedIntent.latest_charge
+            : null;
+
+        await this.ordersService.markSucceeded(order.id, {
+            customerName: billing?.name ?? null,
+            customerEmail: billing?.email ?? null,
+            customerPhone: billing?.phone ?? null,
+            customerCountry: billing?.address?.country ?? null,
+            cardBrand: card?.brand ?? null,
+            cardLast4: card?.last4 ?? null,
+            stripeChargeId: charge?.id ?? null,
+            receiptUrl: charge?.receipt_url ?? null,
+            billingLine1: billing?.address?.line1 ?? null,
+            billingLine2: billing?.address?.line2 ?? null,
+            billingCity: billing?.address?.city ?? null,
+            billingState: billing?.address?.state ?? null,
+            billingPostalCode: billing?.address?.postal_code ?? null,
+            billingCountry: billing?.address?.country ?? null,
+            paymentDate: enrichedIntent.created ? new Date(enrichedIntent.created * 1000) : null,
+        });
         this.logger.log(`💰 Order ${order.id} marked as SUCCEEDED (PI: ${paymentIntent.id})`);
     }
 
