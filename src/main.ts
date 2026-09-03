@@ -15,8 +15,15 @@ async function bootstrap() {
 
     const configService = app.get(ConfigService);
     const port = configService.get<number>('PORT', 3001);
-    const frontendWebUrl = configService.get<string>('FRONTEND_WEB_URL', 'http://localhost:3000');
-    const frontendAdminUrl = configService.get<string>('FRONTEND_ADMIN_URL', 'http://localhost:3002');
+    // Normalize Coolify origin values, including trailing slashes or comma-separated aliases.
+    const normalizeOrigin = (value: string) => new URL(value.trim()).origin;
+    const frontendOrigins = [
+        configService.get<string>('FRONTEND_WEB_URL', 'http://localhost:3000'),
+        configService.get<string>('FRONTEND_ADMIN_URL', 'http://localhost:3002'),
+    ]
+        .flatMap((value) => value.split(','))
+        .map(normalizeOrigin)
+        .filter(Boolean);
     const nodeEnv = configService.get<string>('NODE_ENV', 'development');
 
     // ─── Security: HTTP Headers ─────────────────────────────────────────────────
@@ -25,7 +32,7 @@ async function bootstrap() {
     // ─── Security: CORS ──────────────────────────────────────────────────────────
     // Only allow requests from the known frontend origin.
     app.enableCors({
-        origin: [frontendWebUrl, frontendAdminUrl],
+        origin: frontendOrigins,
         methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
         allowedHeaders: ['Content-Type', 'Authorization'],
         credentials: true,
