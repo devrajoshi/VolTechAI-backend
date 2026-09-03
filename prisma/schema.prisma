@@ -32,6 +32,21 @@ model Order {
   serviceName     String
   status          OrderStatus @default(PENDING)
   stripePaymentId String?     @unique
+  stripeChargeId  String?     @unique
+  customerName    String?
+  customerEmail   String?
+  customerPhone   String?
+  customerCountry String?
+  cardBrand       String?
+  cardLast4       String?
+  receiptUrl      String?
+  billingLine1    String?
+  billingLine2    String?
+  billingCity     String?
+  billingState    String?
+  billingPostalCode String?
+  billingCountry  String?
+  paymentDate     DateTime?
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
   package         Package     @relation(fields: [packageId], references: [id])

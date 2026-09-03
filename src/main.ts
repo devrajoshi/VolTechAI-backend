@@ -16,12 +16,17 @@ async function bootstrap() {
     const configService = app.get(ConfigService);
     const port = configService.get<number>('PORT', 3001);
     // Normalize Coolify origin values, including trailing slashes or comma-separated aliases.
-    const normalizeOrigin = (value: string) => new URL(value.trim()).origin;
+    const normalizeOrigin = (value: string) => {
+        const trimmed = value.trim();
+        return new URL(trimmed.includes('://') ? trimmed : `http://${trimmed}`).origin;
+    };
     const frontendOrigins = [
         configService.get<string>('FRONTEND_WEB_URL', 'http://localhost:3000'),
         configService.get<string>('FRONTEND_ADMIN_URL', 'http://localhost:3002'),
     ]
         .flatMap((value) => value.split(','))
+        .map((value) => value.trim())
+        .filter(Boolean)
         .map(normalizeOrigin)
         .filter(Boolean);
     const nodeEnv = configService.get<string>('NODE_ENV', 'development');

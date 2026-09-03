@@ -17,6 +17,16 @@ export class OrdersController {
     }
 
     /**
+     * GET /api/orders/:id/confirmation
+     *
+     * Returns the order details needed by the checkout confirmation page.
+     */
+    @Get(':id/confirmation')
+    getConfirmation(@Param('id') id: string) {
+        return this.ordersService.getConfirmation(id);
+    }
+
+    /**
      * GET /api/orders
      *
      * Retrieves all orders for the admin dashboard with pagination.
