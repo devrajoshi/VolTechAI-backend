@@ -7,6 +7,8 @@ import { PaymentsModule } from './payments/payments.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
 import { OrdersModule } from './orders/orders.module';
 import { HealthModule } from './health/health.module';
+import { AuthModule } from './auth/auth.module';
+import { ContentModule } from './content/content.module';
 
 @Module({
     imports: [
@@ -32,6 +34,8 @@ import { HealthModule } from './health/health.module';
         WebhooksModule,
         OrdersModule,
         HealthModule,
+        AuthModule,
+        ContentModule,
     ],
     providers: [
         // Apply rate limiting guard globally to all routes.

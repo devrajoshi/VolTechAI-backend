@@ -10,7 +10,8 @@ This is the NestJS backend microservice built to support the VolTechAI applicati
 ## Getting Started
 
 ### 1. Requirements
-Ensure you have Docker to run the database instance:
+Ensure PostgreSQL is running. For the project Compose database, define the
+`POSTGRES_*` values in `.env` first, then run:
 ```bash
 docker compose up -d
 ```
@@ -25,19 +26,25 @@ STRIPE_SECRET_KEY=sk_test_...
 STRIPE_WEBHOOK_SECRET=whsec_...
 FRONTEND_WEB_URL=http://localhost:3000
 FRONTEND_ADMIN_URL=http://localhost:3002
+ADMIN_BOOTSTRAP_EMAIL=admin@example.com
+ADMIN_BOOTSTRAP_PASSWORD=use-a-long-unique-password
+ADMIN_SESSION_TTL_HOURS=12
 ```
 
 ### 3. Install & Seed
-Install dependencies with Bun, execute database schema upgrades, and seed the verified authoritative package catalog.
+Install dependencies, apply the committed migrations, and seed a fresh database.
+The CMS seed only creates missing starter records; it does not replace edits made
+in the admin app.
 ```bash
-bun install
-bunx prisma migrate dev
-bun run db:seed
+pnpm install
+pnpm prisma generate
+pnpm db:migrate:deploy
+pnpm db:seed
 ```
 
 ### 4. Running the Dev Server
 ```bash
-bun run dev
+pnpm dev
 ```
 
 The APIs mount on `http://localhost:3001/api`.
@@ -45,6 +52,6 @@ The APIs mount on `http://localhost:3001/api`.
 ## Testing
 Run unit tests across Modules and complete end-to-end (E2E) testing against active app interfaces:
 ```bash
-bun run test
-bun run test:e2e
+pnpm test -- --runInBand
+pnpm test:e2e
 ```

@@ -42,6 +42,13 @@ import * as Joi from 'joi';
                 // CORS
                 FRONTEND_WEB_URL: Joi.string().uri().default('http://localhost:3000'),
                 FRONTEND_ADMIN_URL: Joi.string().uri().default('http://localhost:3002'),
+
+                // Admin authentication. Bootstrap credentials create an owner only
+                // when the configured email does not yet exist.
+                ADMIN_BOOTSTRAP_EMAIL: Joi.string().email().optional(),
+                ADMIN_BOOTSTRAP_PASSWORD: Joi.string().min(8).max(128).optional(),
+                ADMIN_SESSION_TTL_HOURS: Joi.number().integer().min(1).max(168).default(12),
+
             }),
             validationOptions: {
                 abortEarly: false, // Report ALL missing vars at once, not just the first
