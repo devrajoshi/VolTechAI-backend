@@ -67,8 +67,93 @@ model WebhookEvent {
   @@map("webhook_events")
 }
 
+/// Back-office identities. These accounts are intentionally separate from future
+/// customer accounts so CMS permissions stay explicit and narrowly scoped.
+model AdminUser {
+  id                    String         @id @default(cuid())
+  email                 String         @unique
+  passwordHash          String
+  role                  AdminRole      @default(EDITOR)
+  isActive              Boolean        @default(true)
+  lastLoginAt           DateTime?
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+  sessions              AdminSession[]
+  createdTestimonials   Testimonial[]  @relation("TestimonialCreatedBy")
+  updatedTestimonials   Testimonial[]  @relation("TestimonialUpdatedBy")
+  createdFaqs           Faq[]          @relation("FaqCreatedBy")
+  updatedFaqs           Faq[]          @relation("FaqUpdatedBy")
+
+  @@map("admin_users")
+}
+
+/// Opaque, revocable server sessions. Only a SHA-256 digest of the random token
+/// is persisted, so a database leak cannot be used as a login credential.
+model AdminSession {
+  id         String    @id @default(cuid())
+  tokenHash  String    @unique
+  userId     String
+  expiresAt  DateTime
+  lastUsedAt DateTime  @default(now())
+  createdAt  DateTime  @default(now())
+  user       AdminUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("admin_sessions")
+}
+
+/// Customer proof points shown on the public website when published.
+model Testimonial {
+  id          String     @id @default(cuid())
+  seedKey     String?    @unique
+  name        String
+  role        String?
+  company     String?
+  quote       String
+  rating      Int        @default(5)
+  imagePath   String?
+  isPublished Boolean    @default(false)
+  sortOrder   Int        @default(0)
+  createdById String?
+  updatedById String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  createdBy   AdminUser? @relation("TestimonialCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy   AdminUser? @relation("TestimonialUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@index([isPublished, sortOrder])
+  @@map("testimonials")
+}
+
+/// Frequently asked questions shown on the public website when published.
+model Faq {
+  id          String     @id @default(cuid())
+  seedKey     String?    @unique
+  question    String
+  answer      String
+  category    String?
+  isPublished Boolean    @default(false)
+  sortOrder   Int        @default(0)
+  createdById String?
+  updatedById String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  createdBy   AdminUser? @relation("FaqCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy   AdminUser? @relation("FaqUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@index([isPublished, sortOrder])
+  @@map("faqs")
+}
+
+
 enum OrderStatus {
   PENDING
   SUCCEEDED
   FAILED
+}
+
+enum AdminRole {
+  OWNER
+  EDITOR
 }

@@ -1,4 +1,8 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
+import { AdminRole } from '@prisma/client';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { AdminSessionGuard } from '../auth/guards/admin-session.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
 import { OrdersService } from './orders.service';
 
 @Controller('orders')
@@ -31,6 +35,8 @@ export class OrdersController {
      *
      * Retrieves all orders for the admin dashboard with pagination.
      */
+    @UseGuards(AdminSessionGuard, RolesGuard)
+    @Roles(AdminRole.OWNER, AdminRole.EDITOR)
     @Get()
     getAll(@Query('page') page: string = '1', @Query('limit') limit: string = '10') {
         return this.ordersService.findAll(Number(page), Number(limit));
