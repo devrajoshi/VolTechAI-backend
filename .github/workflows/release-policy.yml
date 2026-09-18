@@ -1,0 +1,28 @@
+name: Release policy
+
+on:
+  pull_request:
+    branches:
+      - master
+    types: [opened, reopened, synchronize, edited, ready_for_review]
+
+permissions:
+  contents: read
+
+jobs:
+  require-main-source:
+    name: Require main as the source branch
+    runs-on: ubuntu-latest
+    steps:
+      - name: Reject pull requests that do not originate from main
+        if: github.event.pull_request.head.ref != 'main'
+        env:
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          echo "Pull requests into master must originate from main."
+          echo "Received source branch: $HEAD_REF"
+          exit 1
+
+      - name: Confirm release source branch
+        if: github.event.pull_request.head.ref == 'main'
+        run: echo "Release pull request from main to master is allowed."
