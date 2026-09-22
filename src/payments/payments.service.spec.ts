@@ -15,6 +15,17 @@ const mockPackage: Package = {
     amount: 150000,
     currency: 'gbp',
     isActive: true,
+    serviceId: 'service_123',
+    tier: 'Starter',
+    shortDescription: 'A fixed-price service package.',
+    features: [],
+    bestFor: '',
+    priceType: 'FIXED',
+    billingType: 'ONE_TIME',
+    purchasable: true,
+    isPublished: true,
+    sortOrder: 0,
+    updatedById: null,
     createdAt: new Date(),
     updatedAt: new Date(),
 };
@@ -95,6 +106,17 @@ describe('PaymentsService', () => {
     });
 
     describe('initializeCheckout', () => {
+        it.each([
+            { priceType: 'STARTING_FROM' }, { priceType: 'POA' },
+            { billingType: 'MONTHLY' }, { amount: null }, { amount: 0 },
+            { purchasable: false }, { isPublished: false }, { isActive: false },
+        ])('rejects ineligible offers before creating orders or calling Stripe: %o', async (change) => {
+            mockPackagesService.findBySlug.mockResolvedValue({ ...mockPackage, ...change });
+            await expect(service.initializeCheckout('tech-launch')).rejects.toThrow();
+            expect(mockOrdersService.create).not.toHaveBeenCalled();
+            expect(service.getStripeClient().paymentIntents.create).not.toHaveBeenCalled();
+        });
+
         it('should initialize checkout successfully with correct data', async () => {
             const result = await service.initializeCheckout('tech-launch');
 

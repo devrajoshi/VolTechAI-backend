@@ -17,6 +17,8 @@ export class PackagesService {
             where: {
                 slug,
                 isActive: true,
+                isPublished: true,
+                service: { isPublished: true },
             },
         });
 

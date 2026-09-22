@@ -7,49 +7,143 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-/// Service packages with authoritative pricing. Seeded from prisma/seed.ts.
+/// Authoritative offers. Existing IDs and order relations must be preserved.
 model Package {
-  id        String   @id @default(cuid())
-  slug      String   @unique
-  name      String
-  amount    Int
-  currency  String   @default("gbp")
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  orders    Order[]
+  id               String            @id @default(cuid())
+  slug             String            @unique
+  name             String
+  amount           Int?
+  currency         String            @default("gbp")
+  isActive         Boolean           @default(true)
+  serviceId        String?
+  service          Service?          @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  tier             String            @default("Starter")
+  shortDescription String            @default("")
+  features         String[]          @default([])
+  bestFor          String            @default("")
+  priceType        PriceType         @default(POA)
+  billingType      BillingType       @default(ONE_TIME)
+  purchasable      Boolean           @default(false)
+  isPublished      Boolean           @default(false)
+  sortOrder        Int               @default(0)
+  updatedById      String?
+  updatedBy        AdminUser?        @relation("PackageUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  bundleComponents BundleComponent[]
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  orders           Order[]
 
   @@index([slug])
+  @@index([serviceId, isPublished, sortOrder])
   @@map("packages")
+}
+
+model Service {
+  id             String         @id @default(cuid())
+  slug           String         @unique
+  name           String
+  summary        String
+  heroTitle      String         @default("")
+  description    String         @default("")
+  bodyHeading    String         @default("")
+  bodyText       String         @default("")
+  sections       Json           @default("[]")
+  iconKey        String         @default("code")
+  seoTitle       String         @default("")
+  seoDescription String         @default("")
+  showOnHomepage Boolean        @default(false)
+  showInFooter   Boolean        @default(false)
+  isPublished    Boolean        @default(false)
+  sortOrder      Int            @default(0)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  createdById    String?
+  updatedById    String?
+  createdBy      AdminUser?     @relation("ServiceCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy      AdminUser?     @relation("ServiceUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  packages       Package[]
+  aliases        ServiceAlias[]
+
+  @@index([isPublished, sortOrder])
+  @@map("services")
+}
+
+model ServiceAlias {
+  slug      String  @id
+  serviceId String
+  service   Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@map("service_aliases")
+}
+
+/// Bundles remain enquiry-only; components are genuine package references.
+model Bundle {
+  id               String            @id @default(cuid())
+  slug             String            @unique
+  name             String
+  shortDescription String
+  isSignature      Boolean           @default(false)
+  isPublished      Boolean           @default(false)
+  sortOrder        Int               @default(0)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  updatedById      String?
+  updatedBy        AdminUser?        @relation("BundleUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  components       BundleComponent[]
+
+  @@index([isPublished, sortOrder])
+  @@map("bundles")
+}
+
+model BundleComponent {
+  bundleId  String
+  packageId String
+  sortOrder Int     @default(0)
+  bundle    Bundle  @relation(fields: [bundleId], references: [id], onDelete: Cascade)
+  package   Package @relation(fields: [packageId], references: [id], onDelete: Restrict)
+
+  @@id([bundleId, packageId])
+  @@map("bundle_components")
+}
+
+enum PriceType {
+  FIXED
+  STARTING_FROM
+  POA
+}
+
+enum BillingType {
+  ONE_TIME
+  MONTHLY
 }
 
 /// Individual payment orders created when a checkout session is initiated.
 model Order {
-  id              String      @id @default(cuid())
-  packageId       String
-  amount          Int
-  currency        String
-  serviceName     String
-  status          OrderStatus @default(PENDING)
-  stripePaymentId String?     @unique
-  stripeChargeId  String?     @unique
-  customerName    String?
-  customerEmail   String?
-  customerPhone   String?
-  customerCountry String?
-  cardBrand       String?
-  cardLast4       String?
-  receiptUrl      String?
-  billingLine1    String?
-  billingLine2    String?
-  billingCity     String?
-  billingState    String?
+  id                String      @id @default(cuid())
+  packageId         String
+  amount            Int
+  currency          String
+  serviceName       String
+  status            OrderStatus @default(PENDING)
+  stripePaymentId   String?     @unique
+  stripeChargeId    String?     @unique
+  customerName      String?
+  customerEmail     String?
+  customerPhone     String?
+  customerCountry   String?
+  cardBrand         String?
+  cardLast4         String?
+  receiptUrl        String?
+  billingLine1      String?
+  billingLine2      String?
+  billingCity       String?
+  billingState      String?
   billingPostalCode String?
-  billingCountry  String?
-  paymentDate     DateTime?
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
-  package         Package     @relation(fields: [packageId], references: [id])
+  billingCountry    String?
+  paymentDate       DateTime?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+  package           Package     @relation(fields: [packageId], references: [id])
 
   @@index([status])
   @@index([stripePaymentId])
@@ -70,19 +164,23 @@ model WebhookEvent {
 /// Back-office identities. These accounts are intentionally separate from future
 /// customer accounts so CMS permissions stay explicit and narrowly scoped.
 model AdminUser {
-  id                    String         @id @default(cuid())
-  email                 String         @unique
-  passwordHash          String
-  role                  AdminRole      @default(EDITOR)
-  isActive              Boolean        @default(true)
-  lastLoginAt           DateTime?
-  createdAt             DateTime       @default(now())
-  updatedAt             DateTime       @updatedAt
-  sessions              AdminSession[]
-  createdTestimonials   Testimonial[]  @relation("TestimonialCreatedBy")
-  updatedTestimonials   Testimonial[]  @relation("TestimonialUpdatedBy")
-  createdFaqs           Faq[]          @relation("FaqCreatedBy")
-  updatedFaqs           Faq[]          @relation("FaqUpdatedBy")
+  id                  String         @id @default(cuid())
+  email               String         @unique
+  passwordHash        String
+  role                AdminRole      @default(EDITOR)
+  isActive            Boolean        @default(true)
+  lastLoginAt         DateTime?
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  sessions            AdminSession[]
+  createdTestimonials Testimonial[]  @relation("TestimonialCreatedBy")
+  updatedTestimonials Testimonial[]  @relation("TestimonialUpdatedBy")
+  createdFaqs         Faq[]          @relation("FaqCreatedBy")
+  updatedFaqs         Faq[]          @relation("FaqUpdatedBy")
+  createdServices     Service[]      @relation("ServiceCreatedBy")
+  updatedServices     Service[]      @relation("ServiceUpdatedBy")
+  updatedPackages     Package[]      @relation("PackageUpdatedBy")
+  updatedBundles      Bundle[]       @relation("BundleUpdatedBy")
 
   @@map("admin_users")
 }
@@ -145,7 +243,6 @@ model Faq {
   @@index([isPublished, sortOrder])
   @@map("faqs")
 }
-
 
 enum OrderStatus {
   PENDING
