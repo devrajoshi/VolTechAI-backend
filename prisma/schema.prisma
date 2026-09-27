@@ -32,6 +32,7 @@ model Package {
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
   orders           Order[]
+  inquiries        Inquiry[]
 
   @@index([slug])
   @@index([serviceId, isPublished, sortOrder])
@@ -63,6 +64,7 @@ model Service {
   updatedBy      AdminUser?     @relation("ServiceUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
   packages       Package[]
   aliases        ServiceAlias[]
+  inquiries      Inquiry[]
 
   @@index([isPublished, sortOrder])
   @@map("services")
@@ -90,6 +92,7 @@ model Bundle {
   updatedById      String?
   updatedBy        AdminUser?        @relation("BundleUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
   components       BundleComponent[]
+  inquiries        Inquiry[]
 
   @@index([isPublished, sortOrder])
   @@map("bundles")
@@ -115,6 +118,87 @@ enum PriceType {
 enum BillingType {
   ONE_TIME
   MONTHLY
+}
+
+enum InquiryKind {
+  GENERAL
+  SERVICE
+  PACKAGE
+  BUNDLE
+}
+
+enum InquirySource {
+  CONTACT_PAGE
+  SERVICE_PAGE
+  PRICING_PAGE
+  BUNDLE_PAGE
+  ABOUT_PAGE
+  HOMEPAGE
+  OTHER
+}
+
+enum InquiryStatus {
+  NEW
+  IN_PROGRESS
+  WAITING_FOR_CLIENT
+  QUOTED
+  WON
+  LOST
+  SPAM
+  ARCHIVED
+}
+
+model Inquiry {
+  id                   String        @id @default(cuid())
+  name                 String
+  email                String
+  phone                String?
+  company              String?
+  website              String?
+  subject              String
+  message              String
+  interest             String?
+  budget               String?
+  timeline             String?
+  kind                 InquiryKind   @default(GENERAL)
+  source               InquirySource @default(CONTACT_PAGE)
+  sourcePath           String?
+  status               InquiryStatus @default(NEW)
+  serviceId            String?
+  packageId            String?
+  bundleId             String?
+  serviceNameSnapshot  String?
+  packageNameSnapshot  String?
+  bundleNameSnapshot   String?
+  packageTierSnapshot  String?
+  packagePriceSnapshot String?
+  assignedAdminId      String?
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+  service              Service?      @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  package              Package?      @relation(fields: [packageId], references: [id], onDelete: SetNull)
+  bundle               Bundle?       @relation(fields: [bundleId], references: [id], onDelete: SetNull)
+  assignedAdmin        AdminUser?    @relation("InquiryAssignedTo", fields: [assignedAdminId], references: [id], onDelete: SetNull)
+  notes                InquiryNote[]
+
+  @@index([createdAt, status])
+  @@index([status, createdAt])
+  @@index([kind, createdAt])
+  @@index([email])
+  @@map("inquiries")
+}
+
+model InquiryNote {
+  id        String    @id @default(cuid())
+  inquiryId String
+  adminId   String
+  note      String
+  createdAt DateTime  @default(now())
+  inquiry   Inquiry   @relation(fields: [inquiryId], references: [id], onDelete: Cascade)
+  admin     AdminUser @relation(fields: [adminId], references: [id], onDelete: Restrict)
+
+  @@index([inquiryId, createdAt])
+  @@map("inquiry_notes")
 }
 
 /// Individual payment orders created when a checkout session is initiated.
@@ -181,6 +265,8 @@ model AdminUser {
   updatedServices     Service[]      @relation("ServiceUpdatedBy")
   updatedPackages     Package[]      @relation("PackageUpdatedBy")
   updatedBundles      Bundle[]       @relation("BundleUpdatedBy")
+  assignedInquiries   Inquiry[]      @relation("InquiryAssignedTo")
+  inquiryNotes        InquiryNote[]
 
   @@map("admin_users")
 }
