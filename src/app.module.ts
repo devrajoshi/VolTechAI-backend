@@ -10,6 +10,7 @@ import { HealthModule } from './health/health.module';
 import { AuthModule } from './auth/auth.module';
 import { ContentModule } from './content/content.module';
 import { CatalogueModule } from './catalogue/catalogue.module';
+import { InquiriesModule } from './inquiries/inquiries.module';
 
 @Module({
     imports: [
@@ -38,6 +39,7 @@ import { CatalogueModule } from './catalogue/catalogue.module';
         AuthModule,
         ContentModule,
         CatalogueModule,
+        InquiriesModule,
     ],
     providers: [
         // Apply rate limiting guard globally to all routes.
