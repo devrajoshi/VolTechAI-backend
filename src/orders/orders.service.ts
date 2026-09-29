@@ -7,6 +7,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { Order, OrderStatus } from '@prisma/client';
 import { Package } from '@prisma/client';
+import { assertPurchasable } from '../packages/checkout-policy';
 
 @Injectable()
 export class OrdersService {
@@ -20,6 +21,7 @@ export class OrdersService {
      * so future package price changes don't affect historical orders.
      */
     async create(pkg: Package): Promise<Order> {
+        assertPurchasable(pkg);
         return this.prisma.order.create({
             data: {
                 packageId: pkg.id,

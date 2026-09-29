@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import Stripe from 'stripe';
 import { PackagesService } from '../packages/packages.service';
 import { OrdersService } from '../orders/orders.service';
+import { assertPurchasable } from '../packages/checkout-policy';
 
 export interface CheckoutResult {
     clientSecret: string;
@@ -46,6 +47,7 @@ export class PaymentsService {
     async initializeCheckout(packageId: string): Promise<CheckoutResult> {
         // Step 1: Get authoritative pricing
         const pkg = await this.packagesService.findBySlug(packageId);
+        assertPurchasable(pkg);
 
         // Step 2: Create order in DB
         const order = await this.ordersService.create(pkg);
