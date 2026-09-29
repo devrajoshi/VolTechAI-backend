@@ -175,9 +175,9 @@ model Inquiry {
   assignedAdminId      String?
   createdAt            DateTime      @default(now())
   updatedAt            DateTime      @updatedAt
-  service              Service?      @relation(fields: [serviceId], references: [id], onDelete: SetNull)
-  package              Package?      @relation(fields: [packageId], references: [id], onDelete: SetNull)
-  bundle               Bundle?       @relation(fields: [bundleId], references: [id], onDelete: SetNull)
+  service              Service?      @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  package              Package?      @relation(fields: [packageId], references: [id], onDelete: Restrict)
+  bundle               Bundle?       @relation(fields: [bundleId], references: [id], onDelete: Restrict)
   assignedAdmin        AdminUser?    @relation("InquiryAssignedTo", fields: [assignedAdminId], references: [id], onDelete: SetNull)
   notes                InquiryNote[]
 
@@ -185,6 +185,9 @@ model Inquiry {
   @@index([status, createdAt])
   @@index([kind, createdAt])
   @@index([email])
+  @@index([serviceId])
+  @@index([packageId])
+  @@index([bundleId])
   @@map("inquiries")
 }
 
@@ -199,6 +202,23 @@ model InquiryNote {
 
   @@index([inquiryId, createdAt])
   @@map("inquiry_notes")
+}
+
+/// Keeps a minimal permanent record after catalogue content is removed.
+model CatalogueDeletion {
+  id         String     @id @default(cuid())
+  resource   String
+  recordId   String
+  name       String
+  slug       String
+  actorId    String?
+  actorEmail String
+  deletedAt  DateTime   @default(now())
+  actor      AdminUser? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([resource, recordId])
+  @@index([deletedAt])
+  @@map("catalogue_deletions")
 }
 
 /// Individual payment orders created when a checkout session is initiated.
@@ -267,6 +287,7 @@ model AdminUser {
   updatedBundles      Bundle[]       @relation("BundleUpdatedBy")
   assignedInquiries   Inquiry[]      @relation("InquiryAssignedTo")
   inquiryNotes        InquiryNote[]
+  catalogueDeletions  CatalogueDeletion[]
 
   @@map("admin_users")
 }
