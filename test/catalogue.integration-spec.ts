@@ -13,6 +13,8 @@ import { AuthService } from "../src/auth/auth.service";
 import { AdminSessionGuard } from "../src/auth/guards/admin-session.guard";
 import { RolesGuard } from "../src/auth/guards/roles.guard";
 import { CatalogueService } from "../src/catalogue/catalogue.service";
+import { CatalogueDeletionService } from "../src/catalogue/catalogue-deletion.service";
+import { CatalogueDeletionController } from "../src/catalogue/catalogue-deletion.controller";
 import { AdminCatalogueController } from "../src/catalogue/admin-catalogue.controller";
 import { PublicCatalogueController } from "../src/catalogue/public-catalogue.controller";
 import { PackagesService } from "../src/packages/packages.service";
@@ -94,9 +96,11 @@ describe("Catalogue migration, authorization and purchase integration", () => {
     const migrations = readdirSync(join(__dirname, "../prisma/migrations"))
       .filter((name) => /^\d/.test(name))
       .sort();
-    for (const migration of migrations.filter(
-      (name) => !name.includes("add_service_catalogue"),
-    )) {
+    const catalogueIndex = migrations.findIndex((name) =>
+      name.includes("add_service_catalogue"),
+    );
+    if (catalogueIndex < 0) throw new Error("Catalogue migration is missing.");
+    for (const migration of migrations.slice(0, catalogueIndex)) {
       cli(
         "db",
         "execute",
@@ -133,11 +137,13 @@ describe("Catalogue migration, authorization and purchase integration", () => {
     const module = await Test.createTestingModule({
       controllers: [
         AdminCatalogueController,
+        CatalogueDeletionController,
         PublicCatalogueController,
         PaymentsController,
       ],
       providers: [
         CatalogueService,
+        CatalogueDeletionService,
         AuthService,
         AdminSessionGuard,
         RolesGuard,
@@ -460,5 +466,217 @@ describe("Catalogue migration, authorization and purchase integration", () => {
       await prisma.package.findUnique({ where: { id: packageId } }),
     ).toMatchObject({ amount: 49999, name: "Existing custom name" });
     expect(await prisma.order.count()).toBe(2);
+  });
+
+  it("restricts permanent deletion checks and rejects linked historical records", async () => {
+    for (const resource of ["services", "packages", "bundles"]) {
+      const path = "/api/admin/cms/" + resource + "/missing";
+      await request(app.getHttpServer())
+        .get(path + "/deletion-check")
+        .expect(401);
+      await request(app.getHttpServer())
+        .get(path + "/deletion-check")
+        .set(auth("EDITOR"))
+        .expect(403);
+      await request(app.getHttpServer())
+        .delete(path + "/permanent")
+        .set(auth("EDITOR"))
+        .send({ slug: "missing" })
+        .expect(403);
+    }
+    const packageCheck = await request(app.getHttpServer())
+      .get("/api/admin/cms/packages/" + packageId + "/deletion-check")
+      .set(auth("OWNER"))
+      .expect(200);
+    expect(packageCheck.body.canDelete).toBe(false);
+    expect(packageCheck.body.blockers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "orders",
+          count: 1,
+          records: [expect.objectContaining({ id: "existing-order" })],
+        }),
+      ]),
+    );
+    await request(app.getHttpServer())
+      .delete("/api/admin/cms/packages/" + packageId + "/permanent")
+      .set(auth("OWNER"))
+      .send({ slug: "website-get-online" })
+      .expect(409);
+    const serviceCheck = await request(app.getHttpServer())
+      .get("/api/admin/cms/services/" + serviceId + "/deletion-check")
+      .set(auth("OWNER"))
+      .expect(200);
+    expect(serviceCheck.body.blockers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "packages",
+          records: expect.arrayContaining([
+            expect.objectContaining({ id: packageId }),
+          ]),
+        }),
+      ]),
+    );
+    expect(
+      await prisma.order.findUnique({ where: { id: "existing-order" } }),
+    ).not.toBeNull();
+  });
+
+  it("requires a matching slug, removes aliases, and writes a deletion audit", async () => {
+    const service = await prisma.service.create({
+      data: {
+        slug: "test-disposable-service",
+        name: "Disposable service",
+        summary: "A disposable test service.",
+      },
+    });
+    await prisma.serviceAlias.create({
+      data: { slug: "test-disposable-alias", serviceId: service.id },
+    });
+    const path = "/api/admin/cms/services/" + service.id;
+    const preview = await request(app.getHttpServer())
+      .get(path + "/deletion-check")
+      .set(auth("OWNER"))
+      .expect(200);
+    expect(preview.body).toMatchObject({
+      canDelete: true,
+      effects: { aliases: 1 },
+    });
+    await request(app.getHttpServer())
+      .delete(path + "/permanent")
+      .set(auth("OWNER"))
+      .send({ slug: "wrong-slug" })
+      .expect(409);
+    await request(app.getHttpServer())
+      .delete(path + "/permanent")
+      .set(auth("OWNER"))
+      .send({ slug: service.slug, extra: true })
+      .expect(400);
+    await request(app.getHttpServer())
+      .delete(path + "/permanent")
+      .set(auth("OWNER"))
+      .send({ slug: service.slug })
+      .expect(200);
+    expect(
+      await prisma.service.findUnique({ where: { id: service.id } }),
+    ).toBeNull();
+    expect(
+      await prisma.serviceAlias.findUnique({
+        where: { slug: "test-disposable-alias" },
+      }),
+    ).toBeNull();
+    expect(
+      await prisma.catalogueDeletion.findFirst({
+        where: { resource: "services", recordId: service.id },
+      }),
+    ).toMatchObject({ slug: service.slug, actorId: "test-OWNER" });
+    await request(app.getHttpServer())
+      .delete(path + "/permanent")
+      .set(auth("OWNER"))
+      .send({ slug: service.slug })
+      .expect(404);
+  });
+
+  it("blocks inquiry references and permits clean bundle and package deletion", async () => {
+    const offer = await prisma.package.create({
+      data: {
+        slug: "test-disposable-package",
+        name: "Disposable package",
+        isActive: false,
+      },
+    });
+    const bundle = await prisma.bundle.create({
+      data: {
+        slug: "test-disposable-bundle",
+        name: "Disposable bundle",
+        shortDescription: "A disposable bundle.",
+        components: { create: { packageId: offer.id } },
+      },
+    });
+    const inquiry = await prisma.inquiry.create({
+      data: {
+        name: "Test customer",
+        email: "customer@catalogue.test",
+        subject: "A linked inquiry",
+        message: "Please contact me.",
+        bundleId: bundle.id,
+        packageId: offer.id,
+        status: "ARCHIVED",
+      },
+    });
+    const packagePath = "/api/admin/cms/packages/" + offer.id;
+    const bundlePath = "/api/admin/cms/bundles/" + bundle.id;
+    const packageCheck = await request(app.getHttpServer())
+      .get(packagePath + "/deletion-check")
+      .set(auth("OWNER"))
+      .expect(200);
+    expect(packageCheck.body.blockers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "bundles",
+          count: 1,
+          records: [expect.objectContaining({ id: bundle.id })],
+        }),
+        expect.objectContaining({
+          code: "inquiries",
+          count: 1,
+          records: [
+            expect.objectContaining({
+              id: inquiry.id,
+              detail: expect.stringContaining("ARCHIVED"),
+            }),
+          ],
+        }),
+      ]),
+    );
+    const bundleCheck = await request(app.getHttpServer())
+      .get(bundlePath + "/deletion-check")
+      .set(auth("OWNER"))
+      .expect(200);
+    expect(bundleCheck.body.blockers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "inquiries",
+          count: 1,
+          records: [expect.objectContaining({ id: inquiry.id })],
+        }),
+      ]),
+    );
+    await request(app.getHttpServer())
+      .delete(bundlePath + "/permanent")
+      .set(auth("OWNER"))
+      .send({ slug: bundle.slug })
+      .expect(409);
+    await prisma.inquiry.update({
+      where: { id: inquiry.id },
+      data: { bundleId: null, packageId: null },
+    });
+    await request(app.getHttpServer())
+      .delete(bundlePath + "/permanent")
+      .set(auth("OWNER"))
+      .send({ slug: bundle.slug })
+      .expect(200);
+    expect(
+      await prisma.bundleComponent.count({ where: { bundleId: bundle.id } }),
+    ).toBe(0);
+    expect(
+      await prisma.package.findUnique({ where: { id: offer.id } }),
+    ).not.toBeNull();
+    await request(app.getHttpServer())
+      .delete(packagePath + "/permanent")
+      .set(auth("OWNER"))
+      .send({ slug: offer.slug })
+      .expect(200);
+    expect(
+      await prisma.inquiry.findUnique({ where: { id: inquiry.id } }),
+    ).toMatchObject({
+      bundleId: null,
+      packageId: null,
+    });
+    expect(
+      await prisma.catalogueDeletion.count({
+        where: { recordId: { in: [offer.id, bundle.id] } },
+      }),
+    ).toBe(2);
   });
 });
